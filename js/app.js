@@ -2,6 +2,10 @@ const CACHE_KEY = 'budget_famille_v2';
 const QUEUE_KEY = 'budget_famille_queue_v1';
 const TABLE     = 'virements';
 
+// Garde-fou contre les suppressions par mégarde (le code est visible dans le
+// source de la page : il protège de la fausse manœuvre, pas d'un curieux).
+const DELETE_CODE = '1818';
+
 let data  = [];
 let queue = JSON.parse(localStorage.getItem(QUEUE_KEY) || '[]');
 
@@ -276,7 +280,10 @@ function addTx() {
 }
 
 function delTx(id) {
-  if (!confirm('Supprimer ce virement ?')) return;
+  const code = prompt('Code à 4 chiffres pour supprimer ce virement :');
+  if (code === null) return; // annulé
+  if (code.trim() !== DELETE_CODE) { alert('Code incorrect — rien n\'a été supprimé.'); return; }
+
   data = data.filter(t => t.id !== id);
   queue.push({ type: 'delete', id });
   writeCache();

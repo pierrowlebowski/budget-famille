@@ -94,6 +94,10 @@ ordinateur : les deux affichent les mêmes données.
 - Sans réseau, la saisie fonctionne quand même : elle est mise en file d'attente
   et part toute seule au retour de la connexion.
 - La dernière version consultée reste affichée hors ligne (cache local).
+- Supprimer un virement demande un code à 4 chiffres, défini par `DELETE_CODE`
+  en haut de [`js/app.js`](js/app.js). C'est un garde-fou contre la fausse
+  manœuvre : le code étant dans le source de la page, il n'empêche pas quelqu'un
+  de déterminé.
 
 ## À savoir
 
