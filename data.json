@@ -1,0 +1,100 @@
+[
+  {
+    "id": "seed_01",
+    "person": "Léa",
+    "amount": 500,
+    "date": "2026-06-20",
+    "note": ""
+  },
+  {
+    "id": "seed_02",
+    "person": "Pierre",
+    "amount": 500,
+    "date": "2026-06-15",
+    "note": ""
+  },
+  {
+    "id": "seed_03",
+    "person": "Pierre",
+    "amount": 1000,
+    "date": "2026-06-01",
+    "note": ""
+  },
+  {
+    "id": "seed_04",
+    "person": "Léa",
+    "amount": 1000,
+    "date": "2026-05-31",
+    "note": ""
+  },
+  {
+    "id": "seed_05",
+    "person": "Pierre",
+    "amount": 1200,
+    "date": "2026-05-18",
+    "note": ""
+  },
+  {
+    "id": "seed_06",
+    "person": "Léa",
+    "amount": 1200,
+    "date": "2026-05-18",
+    "note": ""
+  },
+  {
+    "id": "seed_07",
+    "person": "Pierre",
+    "amount": 500,
+    "date": "2026-04-29",
+    "note": ""
+  },
+  {
+    "id": "seed_08",
+    "person": "Léa",
+    "amount": 1000,
+    "date": "2026-04-29",
+    "note": ""
+  },
+  {
+    "id": "seed_09",
+    "person": "Pierre",
+    "amount": 600,
+    "date": "2026-04-14",
+    "note": ""
+  },
+  {
+    "id": "seed_10",
+    "person": "Pierre",
+    "amount": 800,
+    "date": "2026-04-10",
+    "note": ""
+  },
+  {
+    "id": "seed_11",
+    "person": "Léa",
+    "amount": 1000,
+    "date": "2026-04-02",
+    "note": ""
+  },
+  {
+    "id": "seed_12",
+    "person": "Pierre",
+    "amount": 500,
+    "date": "2026-03-26",
+    "note": ""
+  },
+  {
+    "id": "mqz4culr",
+    "person": "Pierre",
+    "amount": 600,
+    "date": "2026-06-22",
+    "note": ""
+  },
+  {
+    "id": "mqz4e7l9",
+    "person": "Léa",
+    "amount": 1000,
+    "date": "2026-07-02",
+    "note": ""
+  }
+]

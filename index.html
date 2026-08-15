@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Budget Famille</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css" />
+  <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+</head>
+<body>
+
+<div class="app">
+
+  <header>
+    <div class="icon">🏠</div>
+    <div>
+      <h1>Budget Famille</h1>
+      <p>Suivi des virements sur le compte commun</p>
+    </div>
+    <div class="header-actions">
+      <button class="btn btn-export" onclick="exportJSON()" title="Télécharger une copie de sauvegarde JSON">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        JSON
+      </button>
+      <button class="btn btn-export" onclick="exportExcel()" title="Exporter en fichier Excel">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Excel
+      </button>
+    </div>
+  </header>
+
+  <!-- Cartes balance -->
+  <div class="balance-grid" id="balanceGrid"></div>
+
+  <!-- Barre de répartition -->
+  <div class="diff-wrap">
+    <div class="diff-labels">
+      <span id="diffLabelLea">Léa 50%</span>
+      <span id="diffLabelPierre">50% Pierre</span>
+    </div>
+    <div class="diff-bar-bg">
+      <div class="diff-bar-fill" id="diffBar" style="width: 50%;"></div>
+    </div>
+    <div class="diff-status" id="diffStatus">Aucun virement enregistré.</div>
+  </div>
+
+  <!-- Formulaire ajout -->
+  <div class="card">
+    <div class="card-title">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+        <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+      </svg>
+      Nouveau virement
+    </div>
+
+    <div class="add-row">
+      <select id="inPerson">
+        <option value="Léa">Léa</option>
+        <option value="Pierre">Pierre</option>
+      </select>
+      <input type="number" id="inAmount" placeholder="Montant (€)" min="0" step="0.01" />
+      <input type="date" id="inDate" />
+    </div>
+
+    <div class="add-row-2">
+      <input type="text" id="inNote" placeholder="Note (optionnel)" />
+      <button class="btn btn-primary" onclick="addTx()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+          <polyline points="20 6 9 17 4 12"/>
+        </svg>
+        Ajouter
+      </button>
+    </div>
+  </div>
+
+  <!-- Historique -->
+  <div class="card">
+    <div class="card-title">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+        <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+      </svg>
+      Historique
+    </div>
+    <div class="tx-list" id="txList"></div>
+  </div>
+
+</div>
+
+<script src="js/app.js"></script>
+</body>
+</html>
