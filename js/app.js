@@ -1,39 +1,115 @@
-const KEY = 'budget_famille_v1';
-const API = 'http://localhost:3000/api/data';
+const CACHE_KEY = 'budget_famille_v2';
+const QUEUE_KEY = 'budget_famille_queue_v1';
+const TABLE     = 'virements';
 
-let data = [];
-let saveTimer = null;
+let data  = [];
+let queue = JSON.parse(localStorage.getItem(QUEUE_KEY) || '[]');
 
-/* ---- Persistance ---- */
+/* ---- Accès Supabase ---- */
+
+function isConfigured() {
+  return SUPABASE_URL.startsWith('http') && !SUPABASE_URL.includes('VOTRE');
+}
+
+function sbUrl(path) {
+  return `${SUPABASE_URL}/rest/v1/${path}`;
+}
+
+function sbHeaders(extra) {
+  return Object.assign({
+    apikey: SUPABASE_ANON_KEY,
+    Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+    'Content-Type': 'application/json'
+  }, extra || {});
+}
+
+/* ---- Persistance locale (cache + file d'attente hors ligne) ---- */
+
+function writeCache() { localStorage.setItem(CACHE_KEY, JSON.stringify(data)); }
+function writeQueue() { localStorage.setItem(QUEUE_KEY, JSON.stringify(queue)); }
+
+// Rejoue les opérations pas encore envoyées par-dessus l'état du serveur,
+// pour qu'un ajout fait hors ligne ne disparaisse pas de l'écran.
+function applyQueue(rows) {
+  let out = rows.slice();
+  queue.forEach(op => {
+    if (op.type === 'insert' && !out.some(t => t.id === op.row.id)) out.push(op.row);
+    if (op.type === 'delete') out = out.filter(t => t.id !== op.id);
+  });
+  return out;
+}
+
+/* ---- Synchronisation ---- */
+
+function setStatus(state, text) {
+  const el = document.getElementById('syncStatus');
+  el.className = 'sync sync-' + state;
+  el.textContent = text;
+}
+
+async function flushQueue() {
+  if (!isConfigured() || !queue.length) return;
+  setStatus('sync', 'Envoi…');
+
+  while (queue.length) {
+    const op = queue[0];
+    try {
+      const res = op.type === 'insert'
+        // merge-duplicates rend le renvoi idempotent si la ligne est déjà passée
+        ? await fetch(sbUrl(TABLE), {
+            method: 'POST',
+            headers: sbHeaders({ Prefer: 'resolution=merge-duplicates' }),
+            body: JSON.stringify(op.row)
+          })
+        : await fetch(sbUrl(`${TABLE}?id=eq.${encodeURIComponent(op.id)}`), {
+            method: 'DELETE',
+            headers: sbHeaders()
+          });
+      if (!res.ok) throw new Error(await res.text());
+      queue.shift();
+      writeQueue();
+    } catch (e) {
+      console.warn('Supabase : envoi impossible', e);
+      setStatus('off', `${queue.length} en attente`);
+      return;
+    }
+  }
+}
+
+async function pull() {
+  if (!isConfigured()) { setStatus('off', 'Non configuré'); return; }
+  setStatus('sync', 'Synchro…');
+
+  try {
+    const res = await fetch(
+      sbUrl(`${TABLE}?select=id,person,amount,date,note&order=date.desc`),
+      { headers: sbHeaders(), cache: 'no-store' }
+    );
+    if (!res.ok) throw new Error(await res.text());
+
+    const rows = await res.json();
+    data = applyQueue(rows.map(r => ({
+      id: r.id, person: r.person, amount: Number(r.amount), date: r.date, note: r.note || ''
+    })));
+    writeCache();
+    render();
+    setStatus(queue.length ? 'off' : 'ok', queue.length ? `${queue.length} en attente` : 'À jour');
+  } catch (e) {
+    console.warn('Supabase : lecture impossible', e);
+    setStatus('off', queue.length ? `${queue.length} en attente` : 'Hors ligne');
+  }
+}
+
+async function sync() {
+  await flushQueue();
+  await pull();
+}
 
 async function loadData() {
-  try {
-    const res = await fetch(API);
-    if (!res.ok) throw new Error();
-    data = await res.json();
-    // fusionne seed sans écraser ce qui existe
-    const existingIds = new Set(data.map(t => t.id));
-    SEED.forEach(t => { if (!existingIds.has(t.id)) data.push(t); });
-    await persist();
-  } catch {
-    // serveur absent : fallback localStorage
-    data = JSON.parse(localStorage.getItem(KEY) || '[]');
-    const existingIds = new Set(data.map(t => t.id));
-    SEED.forEach(t => { if (!existingIds.has(t.id)) data.push(t); });
-    localStorage.setItem(KEY, JSON.stringify(data));
-  }
+  // Affiche immédiatement le cache, puis rafraîchit depuis le serveur.
+  data = JSON.parse(localStorage.getItem(CACHE_KEY) || '[]');
   render();
-}
-
-async function persist() {
-  localStorage.setItem(KEY, JSON.stringify(data));
-  try { await fetch(API, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data, null, 2) }); }
-  catch { /* hors ligne, localStorage suffit */ }
-}
-
-function save() {
-  clearTimeout(saveTimer);
-  saveTimer = setTimeout(persist, 200);
+  await sync();
 }
 
 /* ---- Helpers ---- */
@@ -186,39 +262,38 @@ function addTx() {
 
   if (!amount || amount <= 0) { document.getElementById('inAmount').focus(); return; }
 
-  data.push({ id: Date.now().toString(36), person, amount, date, note });
-  save();
+  // id unique même si deux appareils saisissent à la même seconde
+  const row = { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), person, amount, date, note };
+  data.push(row);
+  queue.push({ type: 'insert', row });
+  writeCache();
+  writeQueue();
+
   document.getElementById('inAmount').value = '';
   document.getElementById('inNote').value   = '';
   render();
+  sync();
 }
 
 function delTx(id) {
   if (!confirm('Supprimer ce virement ?')) return;
   data = data.filter(t => t.id !== id);
-  save();
+  queue.push({ type: 'delete', id });
+  writeCache();
+  writeQueue();
   render();
+  sync();
 }
 
-/* ---- Seed historique ---- */
-const SEED = [
-  { id: 'seed_01', person: 'Léa',    amount: 500,  date: '2026-06-20', note: '' },
-  { id: 'seed_02', person: 'Pierre', amount: 500,  date: '2026-06-15', note: '' },
-  { id: 'seed_03', person: 'Pierre', amount: 1000, date: '2026-06-01', note: '' },
-  { id: 'seed_04', person: 'Léa',    amount: 1000, date: '2026-05-31', note: '' },
-  { id: 'seed_05', person: 'Pierre', amount: 1200, date: '2026-05-18', note: '' },
-  { id: 'seed_06', person: 'Léa',    amount: 1200, date: '2026-05-18', note: '' },
-  { id: 'seed_07', person: 'Pierre', amount: 500,  date: '2026-04-29', note: '' },
-  { id: 'seed_08', person: 'Léa',    amount: 1000, date: '2026-04-29', note: '' },
-  { id: 'seed_09', person: 'Pierre', amount: 600,  date: '2026-04-14', note: '' },
-  { id: 'seed_10', person: 'Pierre', amount: 800,  date: '2026-04-10', note: '' },
-  { id: 'seed_11', person: 'Léa',    amount: 1000, date: '2026-04-02', note: '' },
-  { id: 'seed_12', person: 'Pierre', amount: 500,  date: '2026-03-26', note: '' },
-];
-
 /* ---- Init ---- */
+
 document.getElementById('inDate').value = today();
 document.getElementById('inAmount').addEventListener('keydown', e => { if (e.key === 'Enter') addTx(); });
 document.getElementById('inNote').addEventListener('keydown', e => { if (e.key === 'Enter') addTx(); });
+
+// Récupère les saisies faites depuis l'autre appareil
+document.addEventListener('visibilitychange', () => { if (!document.hidden) sync(); });
+window.addEventListener('online', sync);
+setInterval(() => { if (!document.hidden) sync(); }, 60000);
 
 loadData();
