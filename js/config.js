@@ -1,6 +1,12 @@
-/* Configuration Supabase — voir SETUP.md pour obtenir ces deux valeurs.
-   Ces clés sont publiques par conception : la clé « publishable » ne donne accès
-   qu'à ce que les règles RLS de la table autorisent. */
+/* Configuration Firebase — voir SETUP.md pour obtenir ces valeurs.
+   Ces clés sont publiques par conception : la sécurité est assurée
+   par les règles Firestore, pas par le secret de ces clés. */
 
-const SUPABASE_URL      = 'https://mghafothkpftinqbptat.supabase.co';
-const SUPABASE_ANON_KEY = 'sb_publishable_4yLii_2qnkvpxj_QakXq2g_SJ8rIoLP';
+const FIREBASE_CONFIG = {
+  apiKey:            'VOTRE_API_KEY',
+  authDomain:        'VOTRE_PROJECT.firebaseapp.com',
+  projectId:         'VOTRE_PROJECT_ID',
+  storageBucket:     'VOTRE_PROJECT.appspot.com',
+  messagingSenderId: 'VOTRE_SENDER_ID',
+  appId:             'VOTRE_APP_ID'
+};

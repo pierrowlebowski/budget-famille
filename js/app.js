@@ -1,39 +1,34 @@
-const CACHE_KEY = 'budget_famille_v2';
-const QUEUE_KEY = 'budget_famille_queue_v1';
-const TABLE     = 'virements';
+const CACHE_KEY  = 'budget_famille_v2';
+const QUEUE_KEY  = 'budget_famille_queue_v1';
+const COLLECTION = 'virements';
 
-// Garde-fou contre les suppressions par mégarde (le code est visible dans le
-// source de la page : il protège de la fausse manœuvre, pas d'un curieux).
 const DELETE_CODE = '1818';
 
 let data  = [];
 let queue = JSON.parse(localStorage.getItem(QUEUE_KEY) || '[]');
+let db    = null;
 
-/* ---- Accès Supabase ---- */
+/* ---- Initialisation Firebase ---- */
 
 function isConfigured() {
-  return SUPABASE_URL.startsWith('http') && !SUPABASE_URL.includes('VOTRE');
+  return FIREBASE_CONFIG.apiKey && !FIREBASE_CONFIG.apiKey.includes('VOTRE');
 }
 
-function sbUrl(path) {
-  return `${SUPABASE_URL}/rest/v1/${path}`;
+function initFirebase() {
+  if (!isConfigured()) return;
+  try {
+    firebase.initializeApp(FIREBASE_CONFIG);
+    db = firebase.firestore();
+  } catch (e) {
+    console.warn('Firebase init :', e);
+  }
 }
 
-function sbHeaders(extra) {
-  return Object.assign({
-    apikey: SUPABASE_ANON_KEY,
-    Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-    'Content-Type': 'application/json'
-  }, extra || {});
-}
-
-/* ---- Persistance locale (cache + file d'attente hors ligne) ---- */
+/* ---- Persistance locale ---- */
 
 function writeCache() { localStorage.setItem(CACHE_KEY, JSON.stringify(data)); }
 function writeQueue() { localStorage.setItem(QUEUE_KEY, JSON.stringify(queue)); }
 
-// Rejoue les opérations pas encore envoyées par-dessus l'état du serveur,
-// pour qu'un ajout fait hors ligne ne disparaisse pas de l'écran.
 function applyQueue(rows) {
   let out = rows.slice();
   queue.forEach(op => {
@@ -43,7 +38,7 @@ function applyQueue(rows) {
   return out;
 }
 
-/* ---- Synchronisation ---- */
+/* ---- Statut sync ---- */
 
 function setStatus(state, text) {
   const el = document.getElementById('syncStatus');
@@ -51,29 +46,25 @@ function setStatus(state, text) {
   el.textContent = text;
 }
 
+/* ---- Synchronisation Firebase ---- */
+
 async function flushQueue() {
-  if (!isConfigured() || !queue.length) return;
+  if (!db || !queue.length) return;
   setStatus('sync', 'Envoi…');
 
   while (queue.length) {
     const op = queue[0];
     try {
-      const res = op.type === 'insert'
-        // merge-duplicates rend le renvoi idempotent si la ligne est déjà passée
-        ? await fetch(sbUrl(TABLE), {
-            method: 'POST',
-            headers: sbHeaders({ Prefer: 'resolution=merge-duplicates' }),
-            body: JSON.stringify(op.row)
-          })
-        : await fetch(sbUrl(`${TABLE}?id=eq.${encodeURIComponent(op.id)}`), {
-            method: 'DELETE',
-            headers: sbHeaders()
-          });
-      if (!res.ok) throw new Error(await res.text());
+      const ref = db.collection(COLLECTION).doc(op.type === 'insert' ? op.row.id : op.id);
+      if (op.type === 'insert') {
+        await ref.set(op.row);
+      } else {
+        await ref.delete();
+      }
       queue.shift();
       writeQueue();
     } catch (e) {
-      console.warn('Supabase : envoi impossible', e);
+      console.warn('Firebase : envoi impossible', e);
       setStatus('off', `${queue.length} en attente`);
       return;
     }
@@ -81,25 +72,21 @@ async function flushQueue() {
 }
 
 async function pull() {
-  if (!isConfigured()) { setStatus('off', 'Non configuré'); return; }
+  if (!db) { setStatus('off', 'Non configuré'); return; }
   setStatus('sync', 'Synchro…');
 
   try {
-    const res = await fetch(
-      sbUrl(`${TABLE}?select=id,person,amount,date,note&order=date.desc`),
-      { headers: sbHeaders(), cache: 'no-store' }
-    );
-    if (!res.ok) throw new Error(await res.text());
-
-    const rows = await res.json();
-    data = applyQueue(rows.map(r => ({
-      id: r.id, person: r.person, amount: Number(r.amount), date: r.date, note: r.note || ''
-    })));
+    const snap = await db.collection(COLLECTION).orderBy('date', 'desc').get();
+    const rows = snap.docs.map(d => {
+      const r = d.data();
+      return { id: d.id, person: r.person, amount: Number(r.amount), date: r.date, note: r.note || '' };
+    });
+    data = applyQueue(rows);
     writeCache();
     render();
     setStatus(queue.length ? 'off' : 'ok', queue.length ? `${queue.length} en attente` : 'À jour');
   } catch (e) {
-    console.warn('Supabase : lecture impossible', e);
+    console.warn('Firebase : lecture impossible', e);
     setStatus('off', queue.length ? `${queue.length} en attente` : 'Hors ligne');
   }
 }
@@ -110,7 +97,6 @@ async function sync() {
 }
 
 async function loadData() {
-  // Affiche immédiatement le cache, puis rafraîchit depuis le serveur.
   data = JSON.parse(localStorage.getItem(CACHE_KEY) || '[]');
   render();
   await sync();
@@ -165,16 +151,9 @@ function exportJSON() {
 function exportExcel() {
   const rows = [...data]
     .sort((a, b) => a.date.localeCompare(b.date))
-    .map(t => ({
-      Date: fmtDate(t.date),
-      Montant: t.amount,
-      Qui: t.person,
-      Note: t.note || ''
-    }));
-
+    .map(t => ({ Date: fmtDate(t.date), Montant: t.amount, Qui: t.person, Note: t.note || '' }));
   const ws = XLSX.utils.json_to_sheet(rows);
   ws['!cols'] = [{ wch: 14 }, { wch: 10 }, { wch: 10 }, { wch: 30 }];
-
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Virements');
   XLSX.writeFile(wb, 'budget-famille.xlsx');
@@ -186,14 +165,14 @@ function render() {
   const totals = { 'Léa': 0, 'Pierre': 0 };
   data.forEach(t => { totals[t.person] = (totals[t.person] || 0) + t.amount; });
 
-  const avgLea = avgLast6Months('Léa');
+  const avgLea    = avgLast6Months('Léa');
   const avgPierre = avgLast6Months('Pierre');
 
   document.getElementById('balanceGrid').innerHTML = ['Léa', 'Pierre'].map(p => {
     const isLea = p === 'Léa';
-    const avg6 = isLea ? avgLea : avgPierre;
+    const avg6   = isLea ? avgLea : avgPierre;
     const avgAll = avgCumulative(p);
-    const cls = isLea ? 'lea' : 'pierre';
+    const cls    = isLea ? 'lea' : 'pierre';
     return `
       <div class="balance-card">
         <div class="avatar ${cls}-avatar">${p.slice(0, 2).toUpperCase()}</div>
@@ -204,13 +183,13 @@ function render() {
       </div>`;
   }).join('');
 
-  const tLea = totals['Léa'] || 0;
+  const tLea    = totals['Léa'] || 0;
   const tPierre = totals['Pierre'] || 0;
-  const total = tLea + tPierre;
-  const leaPct = total > 0 ? (tLea / total * 100) : 50;
+  const total   = tLea + tPierre;
+  const leaPct  = total > 0 ? (tLea / total * 100) : 50;
 
   document.getElementById('diffBar').style.width = leaPct.toFixed(1) + '%';
-  document.getElementById('diffLabelLea').textContent = `Léa ${leaPct.toFixed(0)}%`;
+  document.getElementById('diffLabelLea').textContent    = `Léa ${leaPct.toFixed(0)}%`;
   document.getElementById('diffLabelPierre').textContent = `${(100 - leaPct).toFixed(0)}% Pierre`;
 
   const diff = Math.abs(tLea - tPierre);
@@ -235,7 +214,7 @@ function render() {
 
   listEl.innerHTML = sorted.map(t => {
     const isLea = t.person === 'Léa';
-    const cls = isLea ? 'lea' : 'pierre';
+    const cls   = isLea ? 'lea' : 'pierre';
     return `
       <div class="tx-item">
         <div class="tx-av ${cls}-avatar">${t.person.slice(0, 2).toUpperCase()}</div>
@@ -266,7 +245,6 @@ function addTx() {
 
   if (!amount || amount <= 0) { document.getElementById('inAmount').focus(); return; }
 
-  // id unique même si deux appareils saisissent à la même seconde
   const row = { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), person, amount, date, note };
   data.push(row);
   queue.push({ type: 'insert', row });
@@ -281,7 +259,7 @@ function addTx() {
 
 function delTx(id) {
   const code = prompt('Code à 4 chiffres pour supprimer ce virement :');
-  if (code === null) return; // annulé
+  if (code === null) return;
   if (code.trim() !== DELETE_CODE) { alert('Code incorrect — rien n\'a été supprimé.'); return; }
 
   data = data.filter(t => t.id !== id);
@@ -298,9 +276,9 @@ document.getElementById('inDate').value = today();
 document.getElementById('inAmount').addEventListener('keydown', e => { if (e.key === 'Enter') addTx(); });
 document.getElementById('inNote').addEventListener('keydown', e => { if (e.key === 'Enter') addTx(); });
 
-// Récupère les saisies faites depuis l'autre appareil
 document.addEventListener('visibilitychange', () => { if (!document.hidden) sync(); });
 window.addEventListener('online', sync);
 setInterval(() => { if (!document.hidden) sync(); }, 60000);
 
+initFirebase();
 loadData();
