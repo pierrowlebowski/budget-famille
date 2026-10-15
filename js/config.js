@@ -1,12 +1,8 @@
-/* Configuration Firebase — voir SETUP.md pour obtenir ces valeurs.
-   Ces clés sont publiques par conception : la sécurité est assurée
-   par les règles Firestore, pas par le secret de ces clés. */
-
 const FIREBASE_CONFIG = {
-  apiKey:            'VOTRE_API_KEY',
-  authDomain:        'VOTRE_PROJECT.firebaseapp.com',
-  projectId:         'VOTRE_PROJECT_ID',
-  storageBucket:     'VOTRE_PROJECT.appspot.com',
-  messagingSenderId: 'VOTRE_SENDER_ID',
-  appId:             'VOTRE_APP_ID'
+  apiKey:            'AIzaSyBw-EJ-duWYAjQz4--RplJYoEDWXIWdYkM',
+  authDomain:        'budget-famille-44988.firebaseapp.com',
+  projectId:         'budget-famille-44988',
+  storageBucket:     'budget-famille-44988.firebasestorage.app',
+  messagingSenderId: '785145003258',
+  appId:             '1:785145003258:web:9f7ca24b5950fc04501d43'
 };
